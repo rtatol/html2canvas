@@ -1,4 +1,4 @@
-_html2canvas.Parse = function (images, options, cb) {
+_html2canvas.Parse = function (images, options) {
   window.scroll(0,0);
 
   var element = (( options.elements === undefined ) ? document.body : options.elements[0]), // select body by default
@@ -10,162 +10,14 @@ _html2canvas.Parse = function (images, options, cb) {
   body = doc.body,
   getCSS = Util.getCSS,
   pseudoHide = "___html2canvas___pseudoelement",
-  hidePseudoElementsStyles = doc.createElement('style');
+  hidePseudoElements = doc.createElement('style');
 
-  hidePseudoElementsStyles.innerHTML = '.' + pseudoHide +
-  '-parent:before { content: "" !important; display: none !important; }' +
-  '.' + pseudoHide + '-parent:after { content: "" !important; display: none !important; }';
+  hidePseudoElements.innerHTML = '.' + pseudoHide + '-before:before { content: "" !important; display: none !important; }' +
+  '.' + pseudoHide + '-after:after { content: "" !important; display: none !important; }';
 
-  body.appendChild(hidePseudoElementsStyles);
+  body.appendChild(hidePseudoElements);
 
   images = images || {};
-
-  init();
-
-  function init() {
-    var background = getCSS(document.documentElement, "backgroundColor"),
-      transparentBackground = (Util.isTransparent(background) && element === document.body),
-      stack = renderElement(element, null, false, transparentBackground);
-
-    // create pseudo elements in a single pass to prevent synchronous layouts
-    addPseudoElements(element);
-
-    parseChildren(element, stack, function() {
-      if (transparentBackground) {
-        background = stack.backgroundColor;
-      }
-
-      removePseudoElements();
-
-      Util.log('Done parsing, moving to Render.');
-
-      cb({
-        backgroundColor: background,
-        stack: stack
-      });
-    });
-  }
-
-  // Given a root element, find all pseudo elements below, create elements mocking pseudo element styles
-  // so we can process them as normal elements, and hide the original pseudo elements so they don't interfere
-  // with layout.
-  function addPseudoElements(el) {
-    // These are done in discrete steps to prevent a relayout loop caused by addClass() invalidating
-    // layouts & getPseudoElement calling getComputedStyle.
-    var jobs = [], classes = [];
-    getPseudoElementClasses();
-    findPseudoElements(el);
-    runJobs();
-
-    function getPseudoElementClasses(){
-      var findPsuedoEls = /:before|:after/;
-      var sheets = document.styleSheets;
-      for (var i = 0, j = sheets.length; i < j; i++) {
-        try {
-          var rules = sheets[i].cssRules;
-          for (var k = 0, l = rules.length; k < l; k++) {
-            if(findPsuedoEls.test(rules[k].selectorText)) {
-              classes.push(rules[k].selectorText);
-            }
-          }
-        }
-        catch(e) { // will throw security exception for style sheets loaded from external domains
-        }
-      }
-
-      // Trim off the :after and :before (or ::after and ::before)
-      for (i = 0, j = classes.length; i < j; i++) {
-        classes[i] = classes[i].match(/(^[^:]*)/)[1];
-      }
-    }
-
-    // Using the list of elements we know how pseudo el styles, create fake pseudo elements.
-    function findPseudoElements(el) {
-      var els = document.querySelectorAll(classes.join(','));
-      for(var i = 0, j = els.length; i < j; i++) {
-        createPseudoElements(els[i]);
-      }
-    }
-
-    // Create pseudo elements & add them to a job queue.
-    function createPseudoElements(el) {
-      var before = getPseudoElement(el, ':before'),
-      after = getPseudoElement(el, ':after');
-
-      if(before) {
-        jobs.push({type: 'before', pseudo: before, el: el});
-      }
-
-      if (after) {
-        jobs.push({type: 'after', pseudo: after, el: el});
-      }
-    }
-
-    // Adds a class to the pseudo's parent to prevent the original before/after from messing
-    // with layouts.
-    // Execute the inserts & addClass() calls in a batch to prevent relayouts.
-    function runJobs() {
-      // Add Class
-      jobs.forEach(function(job){
-        addClass(job.el, pseudoHide + "-parent");
-      });
-
-      // Insert el
-      jobs.forEach(function(job){
-        if(job.type === 'before'){
-          job.el.insertBefore(job.pseudo, job.el.firstChild);
-        } else {
-          job.el.appendChild(job.pseudo);
-        }
-      });
-    }
-  }
-
-
-
-  // Delete our fake pseudo elements from the DOM. This will remove those actual elements
-  // and the classes on their parents that hide the actual pseudo elements.
-  // Note that NodeLists are 'live' collections so you can't use a for loop here. They are
-  // actually deleted from the NodeList after each iteration.
-  function removePseudoElements(){
-    // delete pseudo elements
-    body.removeChild(hidePseudoElementsStyles);
-    var pseudos = document.getElementsByClassName(pseudoHide + "-element");
-    while (pseudos.length) {
-      pseudos[0].parentNode.removeChild(pseudos[0]);
-    }
-
-    // Remove pseudo hiding classes
-    var parents = document.getElementsByClassName(pseudoHide + "-parent");
-    while(parents.length) {
-      removeClass(parents[0], pseudoHide + "-parent");
-    }
-  }
-
-  function addClass (el, className) {
-    if (el.classList) {
-      el.classList.add(className);
-    } else {
-      el.className = el.className + " " + className;
-    }
-  }
-
-  function removeClass (el, className) {
-    if (el.classList) {
-      el.classList.remove(className);
-    } else {
-      el.className = el.className.replace(className, "").trim();
-    }
-  }
-
-  function hasClass (el, className) {
-    return el.className.indexOf(className) > -1;
-  }
-
-  // Note that this doesn't work in < IE8, but we don't support that anyhow
-  function nodeListToArray (nodeList) {
-    return Array.prototype.slice.call(nodeList);
-  }
 
   function documentWidth () {
     return Math.max(
@@ -478,19 +330,10 @@ _html2canvas.Parse = function (images, options, cb) {
     newContext.isFloated = isFloated;
     newContext.opacity = opacity;
     newContext.ownStacking = (zIndex !== 'auto' || opacity < 1);
-    newContext.depth = parentStack ? (parentStack.zIndex.depth + 1) : 0;
 
     if (parentStack) {
       parentStack.zIndex.children.push(stack);
     }
-  }
-
-  function h2czContext(zindex) {
-    return {
-      depth: 0,
-      zindex: zindex,
-      children: []
-    };
   }
 
   function renderImage(ctx, element, image, bounds, borders) {
@@ -529,67 +372,69 @@ _html2canvas.Parse = function (images, options, cb) {
     });
   }
 
-  function getCurvePoints(x, y, r1, r2) {
-    var kappa = 4 * ((Math.sqrt(2) - 1) / 3);
-    var ox = (r1) * kappa, // control point offset horizontal
-    oy = (r2) * kappa, // control point offset vertical
-    xm = x + r1, // x-middle
-    ym = y + r2; // y-middle
-    return {
-      topLeft: bezierCurve({
-        x:x,
-        y:ym
-      }, {
-        x:x,
-        y:ym - oy
-      }, {
-        x:xm - ox,
-        y:y
-      }, {
-        x:xm,
-        y:y
-      }),
-      topRight: bezierCurve({
-        x:x,
-        y:y
-      }, {
-        x:x + ox,
-        y:y
-      }, {
-        x:xm,
-        y:ym - oy
-      }, {
-        x:xm,
-        y:ym
-      }),
-      bottomRight: bezierCurve({
-        x:xm,
-        y:y
-      }, {
-        x:xm,
-        y:y + oy
-      }, {
-        x:x + ox,
-        y:ym
-      }, {
-        x:x,
-        y:ym
-      }),
-      bottomLeft: bezierCurve({
-        x:xm,
-        y:ym
-      }, {
-        x:xm - ox,
-        y:ym
-      }, {
-        x:x,
-        y:y + oy
-      }, {
-        x:x,
-        y:y
-      })
+  var getCurvePoints = (function(kappa) {
+
+    return function(x, y, r1, r2) {
+      var ox = (r1) * kappa, // control point offset horizontal
+      oy = (r2) * kappa, // control point offset vertical
+      xm = x + r1, // x-middle
+      ym = y + r2; // y-middle
+      return {
+        topLeft: bezierCurve({
+          x:x,
+          y:ym
+        }, {
+          x:x,
+          y:ym - oy
+        }, {
+          x:xm - ox,
+          y:y
+        }, {
+          x:xm,
+          y:y
+        }),
+        topRight: bezierCurve({
+          x:x,
+          y:y
+        }, {
+          x:x + ox,
+          y:y
+        }, {
+          x:xm,
+          y:ym - oy
+        }, {
+          x:xm,
+          y:ym
+        }),
+        bottomRight: bezierCurve({
+          x:xm,
+          y:y
+        }, {
+          x:xm,
+          y:y + oy
+        }, {
+          x:x + ox,
+          y:ym
+        }, {
+          x:x,
+          y:ym
+        }),
+        bottomLeft: bezierCurve({
+          x:xm,
+          y:ym
+        }, {
+          x:xm - ox,
+          y:ym
+        }, {
+          x:x,
+          y:y + oy
+        }, {
+          x:x,
+          y:y
+        })
+      };
     };
-  }
+  })(4 * ((Math.sqrt(2) - 1) / 3));
 
   function bezierCurve(start, startControl, endControl, end) {
 
@@ -681,19 +526,9 @@ _html2canvas.Parse = function (images, options, cb) {
     brh = borderRadius[2][0],
     brv = borderRadius[2][1],
     blh = borderRadius[3][0],
-    blv = borderRadius[3][1];
+    blv = borderRadius[3][1],
 
-    var halfHeight = Math.floor(height / 2);
-    tlh = tlh > halfHeight ? halfHeight : tlh;
-    tlv = tlv > halfHeight ? halfHeight : tlv;
-    trh = trh > halfHeight ? halfHeight : trh;
-    trv = trv > halfHeight ? halfHeight : trv;
-    brh = brh > halfHeight ? halfHeight : brh;
-    brv = brv > halfHeight ? halfHeight : brv;
-    blh = blh > halfHeight ? halfHeight : blh;
-    blv = blv > halfHeight ? halfHeight : blv;
-
-    var topWidth = width - trh,
+    topWidth = width - trh,
     rightHeight = height - brv,
     bottomWidth = width - brh,
     leftHeight = height - blv;
@@ -938,25 +773,20 @@ _html2canvas.Parse = function (images, options, cb) {
 
   function getPseudoElement(el, which) {
     var elStyle = window.getComputedStyle(el, which);
-    var parentStyle = window.getComputedStyle(el);
-    // If no content attribute is present, the pseudo element is hidden,
-    // or the parent has a content property equal to the content on the pseudo element,
-    // move along.
-    if(!elStyle || !elStyle.content || elStyle.content === "none" || elStyle.content === "-moz-alt-content" ||
-       elStyle.display === "none" || parentStyle.content === elStyle.content) {
+    if(!elStyle || !elStyle.content || elStyle.content === "none" || elStyle.content === "-moz-alt-content" || elStyle.display === "none") {
       return;
     }
-    var content = elStyle.content + '';
-
-    // Strip inner quotes
-    if(content[0] === "'" || content[0] === "\"") {
-      content = content.replace(/(^['"])|(['"]$)/g, '');
+    var content = elStyle.content + '',
+    first = content.substr( 0, 1 );
+    //strips quotes
+    if(first === content.substr( content.length - 1 ) && first.match(/'|"/)) {
+      content = content.substr( 1, content.length - 2 );
     }
 
     var isImage = content.substr( 0, 3 ) === 'url',
     elps = document.createElement( isImage ? 'img' : 'span' );
 
-    elps.className = pseudoHide + "-element ";
+    elps.className = pseudoHide + "-before " + pseudoHide + "-after";
 
     Object.keys(elStyle).filter(indexedProperty).forEach(function(prop) {
       // Prevent assigning of read only CSS Rules, ex. length, parentRule
@@ -977,6 +807,31 @@ _html2canvas.Parse = function (images, options, cb) {
 
   function indexedProperty(property) {
     return (isNaN(window.parseInt(property, 10)));
+  }
+
+  function injectPseudoElements(el, stack) {
+    var before = getPseudoElement(el, ':before'),
+    after = getPseudoElement(el, ':after');
+    if(!before && !after) {
+      return;
+    }
+
+    if(before) {
+      el.className += " " + pseudoHide + "-before";
+      el.parentNode.insertBefore(before, el);
+      parseElement(before, stack, true);
+      el.parentNode.removeChild(before);
+      el.className = el.className.replace(pseudoHide + "-before", "").trim();
+    }
+
+    if (after) {
+      el.className += " " + pseudoHide + "-after";
+      el.appendChild(after);
+      parseElement(after, stack, true);
+      el.removeChild(after);
+      el.className = el.className.replace(pseudoHide + "-after", "").trim();
+    }
+
   }
 
   function renderBackgroundRepeat(ctx, image, backgroundPosition, bounds) {
@@ -1016,25 +871,28 @@ _html2canvas.Parse = function (images, options, cb) {
   function renderBackgroundRepeating(el, bounds, ctx, image, imageIndex) {
     var backgroundSize = Util.BackgroundSize(el, bounds, image, imageIndex),
     backgroundPosition = Util.BackgroundPosition(el, bounds, image, imageIndex, backgroundSize),
-    backgroundRepeat = Util.BackgroundRepeat(el, imageIndex);
+    backgroundRepeat = getCSS(el, "backgroundRepeat").split(",").map(Util.trimText);
 
     image = resizeImage(image, backgroundSize);
 
+    backgroundRepeat = backgroundRepeat[imageIndex] || backgroundRepeat[0];
+
     switch (backgroundRepeat) {
       case "repeat-x":
-      case "repeat no-repeat":
         backgroundRepeatShape(ctx, image, backgroundPosition, bounds,
           bounds.left, bounds.top + backgroundPosition.top, 99999, image.height);
         break;
+
       case "repeat-y":
-      case "no-repeat repeat":
         backgroundRepeatShape(ctx, image, backgroundPosition, bounds,
           bounds.left + backgroundPosition.left, bounds.top, image.width, 99999);
         break;
+
       case "no-repeat":
         backgroundRepeatShape(ctx, image, backgroundPosition, bounds,
           bounds.left + backgroundPosition.left, bounds.top + backgroundPosition.top, image.width, image.height);
         break;
+
       default:
         renderBackgroundRepeat(ctx, image, backgroundPosition, {
           top: bounds.top,
@@ -1095,8 +953,9 @@ _html2canvas.Parse = function (images, options, cb) {
     return str.replace("px", "");
   }
 
+  var transformRegExp = /(matrix)\((.+)\)/;
+
   function getTransform(element, parentStack) {
-    var transformRegExp = /(matrix)\((.+)\)/;
     var transform = getCSS(element, "transform") || getCSS(element, "-webkit-transform") || getCSS(element, "-moz-transform") || getCSS(element, "-ms-transform") || getCSS(element, "-o-transform");
     var transformOrigin = getCSS(element, "transform-origin") || getCSS(element, "-webkit-transform-origin") || getCSS(element, "-moz-transform-origin") || getCSS(element, "-ms-transform-origin") || getCSS(element, "-o-transform-origin") || "0px 0px";
 
@@ -1163,7 +1022,7 @@ _html2canvas.Parse = function (images, options, cb) {
     return bounds;
   }
 
-  function renderElement(element, parentStack, ignoreBackground) {
+  function renderElement(element, parentStack, pseudoElement, ignoreBackground) {
     var transform = getTransform(element, parentStack),
     bounds = getBounds(element, transform),
     image,
@@ -1192,6 +1051,10 @@ _html2canvas.Parse = function (images, options, cb) {
     borderData.borders.forEach(function(border) {
       renderBorders(ctx, border.args, border.color);
     });
+
+    if (!pseudoElement) {
+      injectPseudoElements(element, stack);
+    }
 
     switch(element.nodeName){
       case "IMG":
@@ -1233,51 +1096,48 @@ _html2canvas.Parse = function (images, options, cb) {
     return (getCSS(element, 'display') !== "none" && getCSS(element, 'visibility') !== "hidden" && !element.hasAttribute("data-html2canvas-ignore"));
   }
 
-  function parseElement (element, stack, cb) {
-    if (!cb) {
-      cb = function(){};
-    }
+  function parseElement (element, stack, pseudoElement) {
     if (isElementVisible(element)) {
-      stack = renderElement(element, stack, false) || stack;
+      stack = renderElement(element, stack, pseudoElement, false) || stack;
       if (!ignoreElementsRegExp.test(element.nodeName)) {
-        return parseChildren(element, stack, cb);
+        parseChildren(element, stack, pseudoElement);
       }
     }
-    cb();
   }
 
-  function parseChildren(element, stack, cb) {
-    var children = Util.Children(element);
-    // After all nodes have processed, finished() will call the cb.
-    // We add one and kick it off so this will still work when children.length === 0.
-    // Note that unless async is true, this will happen synchronously, just will callbacks.
-    var jobs = children.length + 1;
-    finished();
-
-    if (options.async) {
-      children.forEach(function(node) {
-        // Don't block the page from rendering
-        setTimeout(function(){ parseNode(node); }, 0);
-      });
-    } else {
-      children.forEach(parseNode);
-    }
-
-    function parseNode(node) {
+  function parseChildren(element, stack, pseudoElement) {
+    Util.Children(element).forEach(function(node) {
       if (node.nodeType === node.ELEMENT_NODE) {
-        parseElement(node, stack, finished);
+        parseElement(node, stack, pseudoElement);
       } else if (node.nodeType === node.TEXT_NODE) {
         renderText(element, node, stack);
-        finished();
-      } else {
-        finished();
       }
-    }
-    function finished(el) {
-      if (--jobs <= 0){
-        Util.log("finished rendering " + children.length + " children.");
-        cb();
-      }
-    }
+    });
   }
+
+  function init() {
+    var background = getCSS(document.documentElement, "backgroundColor"),
+      transparentBackground = (Util.isTransparent(background) && element === document.body),
+      stack = renderElement(element, null, false, transparentBackground);
+    parseChildren(element, stack);
+
+    if (transparentBackground) {
+      background = stack.backgroundColor;
+    }
+
+    body.removeChild(hidePseudoElements);
+    return {
+      backgroundColor: background,
+      stack: stack
+    };
+  }
+
+  return init();
 };
+
+function h2czContext(zindex) {
+  return {
+    zindex: zindex,
+    children: []
+  };
+}

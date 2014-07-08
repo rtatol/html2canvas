@@ -48,6 +48,7 @@ _html2canvas.Util.asFloat = function(v) {
   };
 })();
 
+
 _html2canvas.Util.parseBackgroundImage = function (value) {
     var whitespace = ' \r\n\t',
         method, definition, prefix, prefix_i, block, results = [],
@@ -221,16 +222,13 @@ function asInt(val) {
     return parseInt(val, 10);
 }
 
-function isPercentage(value) {
-  return value.toString().indexOf("%") !== -1;
-}
-
 function parseBackgroundSizePosition(value, element, attribute, index) {
     value = (value || '').split(',');
     value = value[index || 0] || value[0] || 'auto';
     value = _html2canvas.Util.trimText(value).split(' ');
-    if(attribute === 'backgroundSize' && (value[0] && value[0].match(/^(cover|contain|auto)$/))) {
-        return value;
+
+    if(attribute === 'backgroundSize' && (!value[0] || value[0].match(/cover|contain|auto/))) {
+        //these values will be handled in the parent function
     } else {
         value[0] = (value[0].indexOf( "%" ) === -1) ? toPX(element, attribute + "X", value[0]) : value[0];
         if(value[1] === undefined) {
@@ -289,70 +287,71 @@ _html2canvas.Util.resizeBounds = function( current_width, current_height, target
   };
 };
 
-_html2canvas.Util.BackgroundPosition = function(element, bounds, image, imageIndex, backgroundSize ) {
-    var backgroundPosition =  _html2canvas.Util.getCSS(element, 'backgroundPosition', imageIndex),
-        leftPosition,
-        topPosition;
-    if (backgroundPosition.length === 1){
-        backgroundPosition = [backgroundPosition[0], backgroundPosition[0]];
+function backgroundBoundsFactory( prop, el, bounds, image, imageIndex, backgroundSize ) {
+    var bgposition =  _html2canvas.Util.getCSS( el, prop, imageIndex ) ,
+    topPos,
+    left,
+    percentage,
+    val;
+
+    if (bgposition.length === 1){
+      val = bgposition[0];
+
+      bgposition = [];
+
+      bgposition[0] = val;
+      bgposition[1] = val;
     }
 
-    if (isPercentage(backgroundPosition[0])){
-        leftPosition = (bounds.width - (backgroundSize || image).width) * (parseFloat(backgroundPosition[0]) / 100);
+    if (bgposition[0].toString().indexOf("%") !== -1){
+      percentage = (parseFloat(bgposition[0])/100);
+      left = bounds.width * percentage;
+      if(prop !== 'backgroundSize') {
+        left -= (backgroundSize || image).width*percentage;
+      }
     } else {
-        leftPosition = parseInt(backgroundPosition[0], 10);
+      if(prop === 'backgroundSize') {
+        if(bgposition[0] === 'auto') {
+          left = image.width;
+        } else {
+          if (/contain|cover/.test(bgposition[0])) {
+            var resized = _html2canvas.Util.resizeBounds(image.width, image.height, bounds.width, bounds.height, bgposition[0]);
+            left = resized.width;
+            topPos = resized.height;
+          } else {
+            left = parseInt(bgposition[0], 10);
+          }
+        }
+      } else {
+        left = parseInt( bgposition[0], 10);
+      }
     }
 
-    if (backgroundPosition[1] === 'auto') {
-        topPosition = leftPosition / image.width * image.height;
-    } else if (isPercentage(backgroundPosition[1])){
-        topPosition =  (bounds.height - (backgroundSize || image).height) * parseFloat(backgroundPosition[1]) / 100;
+
+    if(bgposition[1] === 'auto') {
+      topPos = left / image.width * image.height;
+    } else if (bgposition[1].toString().indexOf("%") !== -1){
+      percentage = (parseFloat(bgposition[1])/100);
+      topPos =  bounds.height * percentage;
+      if(prop !== 'backgroundSize') {
+        topPos -= (backgroundSize || image).height * percentage;
+      }
+
     } else {
-        topPosition = parseInt(backgroundPosition[1], 10);
+      topPos = parseInt(bgposition[1],10);
     }
 
-    if (backgroundPosition[0] === 'auto') {
-        leftPosition = topPosition / image.height * image.width;
-    }
+    return [left, topPos];
+}
 
-    return {left: leftPosition, top: topPosition};
+_html2canvas.Util.BackgroundPosition = function( el, bounds, image, imageIndex, backgroundSize ) {
+    var result = backgroundBoundsFactory( 'backgroundPosition', el, bounds, image, imageIndex, backgroundSize );
+    return { left: result[0], top: result[1] };
 };
 
-_html2canvas.Util.BackgroundSize = function(element, bounds, image, imageIndex) {
-  var backgroundSize =  _html2canvas.Util.getCSS(element, 'backgroundSize', imageIndex), width, height;
-
-  if (backgroundSize.length === 1) {
-    backgroundSize = [backgroundSize[0], backgroundSize[0]];
-  }
-
-  if (isPercentage(backgroundSize[0])) {
-    width = bounds.width * parseFloat(backgroundSize[0]) / 100;
-  } else if (/contain|cover/.test(backgroundSize[0])) {
-    return _html2canvas.Util.resizeBounds(image.width, image.height, bounds.width, bounds.height, backgroundSize[0]);
-  } else {
-    width = parseInt(backgroundSize[0], 10);
-  }
-
-  if (backgroundSize[0] === 'auto' && backgroundSize[1] === 'auto') {
-    height = image.height;
-  } else if (backgroundSize[1] === 'auto') {
-    height = width / image.width * image.height;
-  } else if (isPercentage(backgroundSize[1])) {
-    height =  bounds.height * parseFloat(backgroundSize[1]) / 100;
-  } else {
-    height = parseInt(backgroundSize[1], 10);
-  }
-
-  if (backgroundSize[0] === 'auto') {
-    width = height / image.height * image.width;
-  }
-
-  return {width: width, height: height};
-};
-
-_html2canvas.Util.BackgroundRepeat = function(element, imageIndex) {
-  var backgroundRepeat = _html2canvas.Util.getCSS(element, "backgroundRepeat").split(",").map(_html2canvas.Util.trimText);
-  return backgroundRepeat[imageIndex] || backgroundRepeat[0];
+_html2canvas.Util.BackgroundSize = function( el, bounds, image, imageIndex ) {
+    var result = backgroundBoundsFactory( 'backgroundSize', el, bounds, image, imageIndex );
+    return { width: result[0], height: result[1] };
 };
 
 _html2canvas.Util.Extend = function (options, defaults) {
@@ -407,5 +406,5 @@ _html2canvas.Util.Children = function( elem ) {
 };
 
 _html2canvas.Util.isTransparent = function(backgroundColor) {
-  return (!backgroundColor || backgroundColor === "transparent" || backgroundColor === "rgba(0, 0, 0, 0)");
+  return (backgroundColor === "transparent" || backgroundColor === "rgba(0, 0, 0, 0)");
 };

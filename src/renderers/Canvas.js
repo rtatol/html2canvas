@@ -17,7 +17,7 @@ _html2canvas.Renderer.Canvas = function(options) {
   }
 
   function safeImage(item) {
-    if (safeImages.indexOf(item['arguments'][0].src) === -1) {
+    if (safeImages.indexOf(item['arguments'][0].src ) === -1) {
       testctx.drawImage(item['arguments'][0], 0, 0);
       try {
         testctx.getImageData(0, 0, 1, 1);
@@ -42,7 +42,8 @@ _html2canvas.Renderer.Canvas = function(options) {
             if (item['arguments'][0].width > 0 && item['arguments'][0].height > 0) {
               try {
                 ctx.fillStyle = ctx.createPattern(item['arguments'][0], "repeat");
-              } catch(e) {
+              }
+              catch(e) {
                 Util.log("html2canvas: Renderer: Error creating pattern", e.message);
               }
             }
@@ -75,9 +76,10 @@ _html2canvas.Renderer.Canvas = function(options) {
     canvas.height = canvas.style.height = options.height || zStack.ctx.height;
 
     fstyle = ctx.fillStyle;
-    ctx.fillStyle = (Util.isTransparent(parsedData.backgroundColor) && options.background !== undefined) ? options.background : parsedData.backgroundColor;
+    ctx.fillStyle = (Util.isTransparent(zStack.backgroundColor) && options.background !== undefined) ? options.background : parsedData.backgroundColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = fstyle;
+
     queue.forEach(function(storageContext) {
       // set common settings for canvas
       ctx.textBaseline = "bottom";
@@ -115,9 +117,7 @@ _html2canvas.Renderer.Canvas = function(options) {
         newCanvas.height = Math.ceil(bounds.height);
         ctx = newCanvas.getContext("2d");
 
-		var imgData = canvas.getContext("2d").getImageData(bounds.left, bounds.top, bounds.width, bounds.height);
-		ctx.putImageData(imgData, 0, 0);
-
+        ctx.drawImage(canvas, bounds.left, bounds.top, bounds.width, bounds.height, 0, 0, bounds.width, bounds.height);
         canvas = null;
         return newCanvas;
       }
